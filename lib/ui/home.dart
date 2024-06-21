@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:weather/models/city.dart';
 import 'package:weather/models/constants.dart';
-import 'package:weather/ui/detail_page.dart';
 
 class Home extends StatefulWidget {
   const Home({Key? key}) : super(key: key);
@@ -18,63 +17,52 @@ class _HomeState extends State<Home> {
 
   // State variables for weather data
   int temperature = 0;
-  String weatherStateName = 'Loading...';
+  String weatherDescription = 'Loading...';
   int humidity = 0;
-  int windSpeed = 0;
+  double windSpeed = 0;
   String currentDate = 'Loading...';
-  String imageUrl = '';
-  String location = 'Delhi'; // Default city
-  int woeid = 28743736; // WOEID for Delhi
+  String iconCode = '';
+  String location = 'Delhi'; // Default location
+  String apiKey = '194c3c4447f31cf05698b9167d2831a2';
+  String apiUrl =
+      'https://api.openweathermap.org/data/2.5/weather';
 
   // Lists to hold cities and weather data
   List<City> selectedCities = City.getSelectedCities();
   List<String> cities = [];
 
-  // API URLs
-  String searchLocationUrl = 'https://www.metaweather.com/api/location/search/?query=';
-  String searchWeatherUrl = 'https://www.metaweather.com/api/location/';
-
   @override
   void initState() {
     super.initState();
     populateDropdown();
-    fetchWeather(location);
+    fetchWeather(location); // Fetch weather data for default location on startup
   }
 
   void populateDropdown() {
-    cities = selectedCities.where((city) => city.city != location).map((city) => city.city).toList();
+    cities = selectedCities.map((city) => city.city).toList(); // Populate city names in dropdown
   }
 
-  void fetchWeather(String location) async {
+  Future<void> fetchWeather(String location) async {
     try {
-      // Step 1: Search for location (city)
-      var locationResponse = await http.get(Uri.parse(searchLocationUrl + location));
-      if (locationResponse.statusCode == 200) {
-        var locationResult = json.decode(locationResponse.body);
-        if (locationResult != null && locationResult.isNotEmpty) {
-          var woeid = locationResult[0]['woeid']; // Get woeid for the first location
-          // Step 2: Fetch weather using woeid
-          var weatherResponse = await http.get(Uri.parse(searchWeatherUrl + woeid.toString()));
-          if (weatherResponse.statusCode == 200) {
-            var weatherResult = json.decode(weatherResponse.body);
-            var weather = weatherResult['consolidated_weather'];
+      // Construct the API URL with query parameters
+      var url = Uri.parse('$apiUrl?q=$location&appid=$apiKey&units=metric');
 
-            setState(() {
-              temperature = weather[0]['the_temp'].round();
-              weatherStateName = weather[0]['weather_state_name'];
-              humidity = weather[0]['humidity'].round();
-              windSpeed = (weather[0]['wind_speed'] * 1.60934).round(); // Convert to km/h
-              imageUrl = weatherStateName.replaceAll(' ', '').toLowerCase();
-              currentDate = DateFormat('EEEE, MMM d').format(DateTime.parse(weather[0]['applicable_date']));
-            });
-          } else {
-            print('Failed to load weather data. Status code: ${weatherResponse.statusCode}');
-          }
-        } else {
-          print('Location not found');
-        }
+      // Make the API call
+      var response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        var weatherData = jsonDecode(response.body);
+
+        setState(() {
+          temperature = weatherData['main']['temp'].round();
+          weatherDescription = weatherData['weather'][0]['description'];
+          humidity = weatherData['main']['humidity'];
+          windSpeed = weatherData['wind']['speed'];
+          iconCode = weatherData['weather'][0]['icon'];
+          currentDate = DateFormat('EEEE, MMM d').format(DateTime.now());
+        });
       } else {
-        print('Failed to load location data. Status code: ${locationResponse.statusCode}');
+        print('Failed to load weather data. Status code: ${response.statusCode}');
       }
     } catch (e) {
       print("Error fetching data: $e");
@@ -95,29 +83,22 @@ class _HomeState extends State<Home> {
           icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
           dropdownColor: myConstants.primaryColor,
           onChanged: (String? newValue) {
-            setState(() {
-              location = newValue!;
-              fetchWeather(location);
-            });
+            if (newValue != null) {
+              setState(() {
+                location = newValue; // Update selected location
+                fetchWeather(location); // Fetch weather data for the selected location
+              });
+            }
           },
-          items: [
-            DropdownMenuItem<String>(
-              value: location,
+          items: cities.map<DropdownMenuItem<String>>((String value) {
+            return DropdownMenuItem<String>(
+              value: value,
               child: Text(
-                location,
+                value,
                 style: TextStyle(color: Colors.white, fontSize: 20),
               ),
-            ),
-            ...cities.map((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(
-                  value,
-                  style: TextStyle(color: Colors.white, fontSize: 20),
-                ),
-              );
-            }).toList(),
-          ],
+            );
+          }).toList(),
         ),
       ),
       body: SingleChildScrollView(
@@ -158,7 +139,7 @@ class _HomeState extends State<Home> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      weatherStateName,
+                      weatherDescription,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24,
@@ -168,9 +149,9 @@ class _HomeState extends State<Home> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        if (imageUrl.isNotEmpty)
-                          Image.asset(
-                            'assets/$imageUrl.png',
+                        if (iconCode.isNotEmpty)
+                          Image.network(
+                            'https://openweathermap.org/img/wn/$iconCode.png',
                             width: 100,
                             height: 100,
                           ),
@@ -213,7 +194,7 @@ class _HomeState extends State<Home> {
                   itemBuilder: (context, index) {
                     var date = DateFormat('E').format(DateTime.now().add(Duration(days: index)));
                     var dayTemp = temperature.toString();
-                    var dayWeather = weatherStateName.replaceAll(' ', '').toLowerCase();
+                    var dayWeather = weatherDescription.toLowerCase();
                     return weatherDayCard(date, dayTemp, dayWeather);
                   },
                 ),
@@ -288,7 +269,6 @@ class _HomeState extends State<Home> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          // Image.asset('assets/$assetPath.png', width: 40),
           Text(
             '$temp°C',
             style: const TextStyle(
@@ -301,4 +281,3 @@ class _HomeState extends State<Home> {
     );
   }
 }
-
