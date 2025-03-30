@@ -1,0 +1,2 @@
+/Users/gautam/weather_app/android/app/.cxx/RelWithDebInfo/363lg1c7/x86/CMakeFiles/rebuild_cache.dir
+/Users/gautam/weather_app/android/app/.cxx/RelWithDebInfo/363lg1c7/x86/CMakeFiles/edit_cache.dir
